@@ -9,19 +9,74 @@
     #define COMMANDS_H
 
 #include <string>
+#include <unistd.h>
+#include <sys/socket.h>
 
-void handleUSER(int clientSock, const std::string& args, std::string& currentUser);
-void handlePASS(int clientSock, const std::string& args, const std::string& currentUser, bool& isAuthenticated);
-void handleQUIT(int clientSock);
-void handlePWD(int clientSock, bool isAuthenticated);
-void handleCWD(int clientSock, const std::string& args, bool isAuthenticated);
-void handleLIST(int clientSock, bool isAuthenticated);
-void handleNOOP(int clientSock);
-void handleHELP(int clientSock);
-void handlePASV(int clientSock, int& dataSock);
-void handlePORT(int clientSock, const std::string& args, int& dataSock);
-void handleRETR(int clientSock, const std::string& args, bool isAuthenticated, int dataSock);
-void handleSTOR(int clientSock, const std::string& args, bool isAuthenticated, int dataSock);
-void handleDELE(int clientSock, const std::string& args, bool isAuthenticated);
+class Command {
+protected:
+    int clientSock;
+    bool& isAuthenticated;
+    std::string& currentDirectory;
+
+public:
+    Command(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : clientSock(clientSock), isAuthenticated(isAuthenticated), currentDirectory(currentDirectory) {}
+
+    virtual ~Command() = default;
+    virtual void execute(const std::string& args) = 0;
+
+protected:
+    void sendResponse(const std::string& response) {
+        send(clientSock, response.c_str(), response.size(), 0);
+    }
+};
+
+class PWDCommand : public Command {
+public:
+    PWDCommand(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : Command(clientSock, isAuthenticated, currentDirectory) {}
+
+    void execute(const std::string& args) override;
+};
+
+class USERCommand : public Command {
+public:
+    USERCommand(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : Command(clientSock, isAuthenticated, currentDirectory) {}
+
+    void execute(const std::string& args) override;
+};
+
+class PASSCommand : public Command {
+public:
+    PASSCommand(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : Command(clientSock, isAuthenticated, currentDirectory) {}
+
+    void execute(const std::string& args) override;
+};
+
+class QUITCommand : public Command {
+public:
+    QUITCommand(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : Command(clientSock, isAuthenticated, currentDirectory) {}
+
+    void execute(const std::string& args) override;
+};
+
+class CWDCommand : public Command {
+public:
+    CWDCommand(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : Command(clientSock, isAuthenticated, currentDirectory) {}
+
+    void execute(const std::string& args) override;
+};
+
+class LISTCommand : public Command {
+public:
+    LISTCommand(int clientSock, bool& isAuthenticated, std::string& currentDirectory)
+            : Command(clientSock, isAuthenticated, currentDirectory) {}
+
+    void execute(const std::string& args) override;
+};
 
 #endif

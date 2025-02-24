@@ -1,15 +1,14 @@
 #include "server.hpp"
-#include "commands.hpp"
-#include "utils.hpp"
 #include <iostream>
 #include <unistd.h>
 #include <cstring>
 #include <poll.h>
 #include <arpa/inet.h>
 
-FTPServer::FTPServer(int port, const std::string& homeDir) : port(port), homeDir(homeDir), isAuthenticated(false), dataSock(-1) {
+FTPServer::FTPServer(int port, const std::string& homeDir)
+        : port(port), homeDir(homeDir), currentDirectory(homeDir), isAuthenticated(false), dataSock(-1) {
     setupServer();
-    initializeCommandMap();
+    initializeCommands(-1);
 }
 
 void FTPServer::setupServer() {
@@ -32,6 +31,15 @@ void FTPServer::setupServer() {
         close(serverSock);
         exit(EXIT_FAILURE);
     }
+}
+
+void FTPServer::initializeCommands(int clientSock) {
+    commands["USER"] = std::unique_ptr<USERCommand>(new USERCommand(clientSock, isAuthenticated, currentDirectory));
+    commands["PASS"] = std::unique_ptr<PASSCommand>(new PASSCommand(clientSock, isAuthenticated, currentDirectory));
+    commands["QUIT"] = std::unique_ptr<QUITCommand>(new QUITCommand(clientSock, isAuthenticated, currentDirectory));
+    commands["PWD"] = std::unique_ptr<PWDCommand>(new PWDCommand(clientSock, isAuthenticated, currentDirectory));
+    commands["CWD"] = std::unique_ptr<CWDCommand>(new CWDCommand(clientSock, isAuthenticated, currentDirectory));
+    commands["LIST"] = std::unique_ptr<LISTCommand>(new LISTCommand(clientSock, isAuthenticated, currentDirectory));
 }
 
 void FTPServer::start() {
@@ -69,63 +77,38 @@ void FTPServer::acceptClient(std::vector<struct pollfd>& fds) {
     struct pollfd clientPollFd = {clientSock, POLLIN, 0};
     fds.push_back(clientPollFd);
     sendResponse(clientSock, "220 Welcome to MyFTP Server\r\n");
+    initializeCommands(clientSock);
 }
 
 void FTPServer::handleClient(int clientSock) {
+    currentDirectory = homeDir;
+    if (chdir(currentDirectory.c_str()) != 0) {
+        std::cerr << "Failed to change to home directory" << std::endl;
+        return;
+    }
+
     while (true) {
         std::string command = receiveCommand(clientSock);
         if (command.empty()) {
             break;
         }
-        processCommand(clientSock, command);
+        size_t spacePos = command.find(' ');
+        std::string cmd = (spacePos != std::string::npos) ? command.substr(0, spacePos) : command;
+        std::string args = (spacePos != std::string::npos) ? command.substr(spacePos + 1) : "";
+
+        processCommand(clientSock, cmd, args);
     }
 }
 
-void FTPServer::initializeCommandMap() {
-    commandMap["USER"] = [this](int clientSock, const std::string& args) { handleUSER(clientSock, args, currentUser); };
-    commandMap["PASS"] = [this](int clientSock, const std::string& args) { handlePASS(clientSock, args, currentUser, isAuthenticated); };
-    commandMap["QUIT"] = [this](int clientSock, const std::string&) { handleQUIT(clientSock); };
-    commandMap["PWD"] = [this](int clientSock, const std::string&) { handlePWD(clientSock, isAuthenticated); };
-    commandMap["CWD"] = [this](int clientSock, const std::string& args) { handleCWD(clientSock, args, isAuthenticated); };
-    commandMap["LIST"] = [this](int clientSock, const std::string&) { handleLIST(clientSock, isAuthenticated); };
-    commandMap["NOOP"] = [this](int clientSock, const std::string&) { handleNOOP(clientSock); };
-    commandMap["HELP"] = [this](int clientSock, const std::string&) { handleHELP(clientSock); };
-    commandMap["PASV"] = [this](int clientSock, const std::string&) { handlePASV(clientSock, dataSock); };
-    commandMap["PORT"] = [this](int clientSock, const std::string& args) { handlePORT(clientSock, args, dataSock); };
-    commandMap["RETR"] = [this](int clientSock, const std::string& args) { handleRETR(clientSock, args, isAuthenticated, dataSock); };
-    commandMap["STOR"] = [this](int clientSock, const std::string& args) { handleSTOR(clientSock, args, isAuthenticated, dataSock); };
-    commandMap["DELE"] = [this](int clientSock, const std::string& args) { handleDELE(clientSock, args, isAuthenticated); };
-}
-
-void FTPServer::processCommand(int clientSock, const std::string& command) {
-    if (command.empty() || command.find_first_not_of(' ') == std::string::npos) {
-        sendResponse(clientSock, "500 Syntax error, command unrecognized.\r\n");
-        return;
-    }
-
-    std::string cmd;
-    std::string args;
-    size_t spacePos = command.find(' ');
-
-    if (spacePos != std::string::npos) {
-        cmd = command.substr(0, spacePos);
-        args = command.substr(spacePos + 1);
-    } else {
-        cmd = command;
-    }
-
-    auto it = commandMap.find(cmd);
-    if (it != commandMap.end()) {
-        it->second(clientSock, args);
+void FTPServer::processCommand(int clientSock, const std::string& command, const std::string& args) {
+    std::cout << "Processing command: " << command << " with args: " << args << std::endl;
+    auto it = commands.find(command);
+    if (it != commands.end()) {
+        it->second->execute(args);
     } else {
         sendResponse(clientSock, "502 Command not implemented.\r\n");
     }
 }
-
-void FTPServer::sendResponse(int clientSock, const std::string& response) {
-    send(clientSock, response.c_str(), response.size(), 0);
-}
-
 std::string FTPServer::receiveCommand(int clientSock) {
     char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
@@ -134,4 +117,8 @@ std::string FTPServer::receiveCommand(int clientSock) {
         return "";
     }
     return std::string(buffer);
+}
+
+void FTPServer::sendResponse(int clientSock, const std::string& response) {
+    send(clientSock, response.c_str(), response.size(), 0);
 }
