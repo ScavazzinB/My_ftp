@@ -18,6 +18,7 @@ private:
     bool isAuthenticated;
     std::string currentUser;
     int dataSock;
+    int dataPort;
     std::map<std::string, std::unique_ptr<Command>> commands;
 
 public:
@@ -26,11 +27,12 @@ public:
 
 private:
     void setupServer();
-    void initializeCommands(int clientSock);    void acceptClient(std::vector<struct pollfd>& fds);
+    void initializeCommands(int clientSock);
+    void acceptClient(std::vector<struct pollfd>& fds);
     void handleClient(int clientSock);
     void processCommand(int clientSock, const std::string& command, const std::string& args);
     std::string receiveCommand(int clientSock);
     void sendResponse(int clientSock, const std::string& response);
 };
 
-#endif // SERVER_H
+#endif
