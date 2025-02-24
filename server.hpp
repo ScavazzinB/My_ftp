@@ -8,16 +8,16 @@
 #ifndef SERVER_H
     #define SERVER_H
 
-    #include <string>
-    #include <vector>
-    #include <netinet/in.h>
-
+#include <string>
+#include <vector>
+#include <map>
+#include <functional>
+#include <netinet/in.h>
 
 class FTPServer {
 public:
     FTPServer(int port, const std::string& homeDir);
     void start();
-
 
 private:
     void setupServer();
@@ -33,6 +33,10 @@ private:
     struct sockaddr_in serverAddr;
     std::string currentUser;
     bool isAuthenticated;
+    int dataSock;
+
+    std::map<std::string, std::function<void(int, const std::string&)>> commandMap;
+    void initializeCommandMap();
 };
 
 #endif

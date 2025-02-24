@@ -16,5 +16,12 @@ void handleQUIT(int clientSock);
 void handlePWD(int clientSock, bool isAuthenticated);
 void handleCWD(int clientSock, const std::string& args, bool isAuthenticated);
 void handleLIST(int clientSock, bool isAuthenticated);
+void handleNOOP(int clientSock);
+void handleHELP(int clientSock);
+void handlePASV(int clientSock, int& dataSock);
+void handlePORT(int clientSock, const std::string& args, int& dataSock);
+void handleRETR(int clientSock, const std::string& args, bool isAuthenticated, int dataSock);
+void handleSTOR(int clientSock, const std::string& args, bool isAuthenticated, int dataSock);
+void handleDELE(int clientSock, const std::string& args, bool isAuthenticated);
 
 #endif
